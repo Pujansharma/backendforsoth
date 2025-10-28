@@ -119,16 +119,13 @@ transporter.verify((err, success) => {
 // GET all hotels
 app.get("/api/hotels", async (req, res) => {
   try {
-    console.log("Fetching hotels...");
     const hotels = await Hotel.find();
-    console.log("Hotels fetched:", hotels.length);
     res.json(hotels);
   } catch (err) {
     console.error("Error fetching hotels:", err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Failed to fetch hotels" });
   }
 });
-
 
 // GET single hotel by name
 app.get("/api/hotels/:name", async (req, res) => {
@@ -291,7 +288,7 @@ app.post("/send-enquiry", async (req, res) => {
   try {
     const adminMail = {
       from: Adminmail,
-      to: "hotelsouthendsurfride@gmail.com",
+      to: Adminmail,
       subject: "New Enquiry Received from Website",
       html: `
         <h2>New Enquiry Received</h2>
@@ -301,7 +298,7 @@ app.post("/send-enquiry", async (req, res) => {
           <li><b>Check-Out:</b> ${checkOut}</li>
           <li><b>Adults:</b> ${adults}</li>
           <li><b>Children:</b> ${children}</li>
-          <li><b>User Phone No:</b> ${phone}</li>
+          <li><b>User Email:</b> ${phone}</li>
         </ul>
         <p>— This enquiry was submitted via your website form.</p>
       `,
@@ -327,7 +324,7 @@ app.post("/send-mail", async (req, res) => {
   try {
     const adminMail = {
       from: email,
-      to: "hotelsouthendsurfride@gmail.com",
+      to: Adminmail,
       subject: `New Message from ${name}`,
       html: `
         <h2>New Contact Message</h2>
@@ -355,7 +352,7 @@ app.post("/send-contact-message", async (req, res) => {
   try {
     const adminMail = {
       from: email,
-      to: "hotelsouthendsurfride@gmail.com",
+      to: Adminmail,
       subject: `New Contact Message from ${firstName} ${lastName}`,
       html: `
         <h2>New Contact Form Message</h2>
@@ -398,7 +395,7 @@ app.post("/api/reservation", async (req, res) => {
 
     const adminMail = {
       from: Adminmail,
-      to: "hotelsouthendsurfride@gmail.com",
+      to: Adminmail,
       subject: `New Reservation - ${hotel}`,
       html: `
         <h2>New Reservation Request</h2>
@@ -414,7 +411,27 @@ app.post("/api/reservation", async (req, res) => {
         </ul>
       `,
     };
+
+    const userMail = {
+      from: Adminmail,
+      to: email,
+      subject: `Your Reservation at ${hotel} is Confirmed`,
+      html: `
+        <h2>Reservation Confirmed!</h2>
+        <p>Dear ${name},</p>
+        <p>Thank you for booking with us. Here are your details:</p>
+        <ul>
+          <li><b>Hotel:</b> ${hotel}</li>
+          <li><b>Check-In:</b> ${checkIn}</li>
+          <li><b>Check-Out:</b> ${checkOut}</li>
+          <li><b>Nights:</b> ${nights}</li>
+          <li><b>Guests:</b> ${guests} (Adults: ${adults})</li>
+        </ul>
+      `,
+    };
+
     await safeSendMail(adminMail);
+    await safeSendMail(userMail);
 
     res.json({ success: true, message: "Emails sent successfully" });
   } catch (error) {
@@ -424,24 +441,13 @@ app.post("/api/reservation", async (req, res) => {
 });
 
 // popup endpoints
-// ---------------------
-// popup endpoints (in-memory fallback for Vercel)
-// ---------------------
-
-let popupData = { active: false, imageUrl: "" };
-
-// Load popup data once at startup (if exists)
-try {
-  if (fs.existsSync("/tmp/popup.json")) {
-    popupData = JSON.parse(fs.readFileSync("/tmp/popup.json", "utf8"));
-  }
-} catch (err) {
-  console.warn("⚠️ Could not read popup.json at startup:", err.message);
-}
-
 app.get("/api/popup", (req, res) => {
   try {
-    res.json(popupData);
+    if (fs.existsSync("popup.json")) {
+      const popupData = JSON.parse(fs.readFileSync("popup.json", "utf8"));
+      return res.json(popupData);
+    }
+    res.json({ active: false });
   } catch (err) {
     console.error("Error reading popup:", err);
     res.status(500).json({ message: err.message });
@@ -452,8 +458,8 @@ app.post("/api/popup", (req, res) => {
   try {
     const { imageUrl } = req.body;
     if (!imageUrl) return res.status(400).json({ message: "Image URL is required" });
-    popupData = { active: true, imageUrl };
-    fs.writeFileSync("/tmp/popup.json", JSON.stringify(popupData, null, 2)); // works on Vercel
+    const popupData = { active: true, imageUrl };
+    fs.writeFileSync("popup.json", JSON.stringify(popupData, null, 2));
     res.json({ message: "Popup image added successfully!", ...popupData });
   } catch (err) {
     console.error("Error writing popup:", err);
@@ -463,8 +469,7 @@ app.post("/api/popup", (req, res) => {
 
 app.delete("/api/popup", (req, res) => {
   try {
-    popupData = { active: false, imageUrl: "" };
-    if (fs.existsSync("/tmp/popup.json")) fs.unlinkSync("/tmp/popup.json");
+    if (fs.existsSync("popup.json")) fs.unlinkSync("popup.json");
     res.json({ message: "Popup removed successfully!" });
   } catch (err) {
     console.error("Error removing popup:", err);
